@@ -35,6 +35,7 @@ class DetailsPanel extends React.Component {
     this.thNotify = $injector.get('thNotify');
     this.$rootScope = $injector.get('$rootScope');
     this.$location = $injector.get('$location');
+    this.$timeout = $injector.get('$timeout');
 
     // used to cancel all the ajax requests triggered by selectJob
     this.selectJobController = null;
@@ -68,22 +69,27 @@ class DetailsPanel extends React.Component {
     this.addBug = this.addBug.bind(this);
     this.removeBug = this.removeBug.bind(this);
     this.closeJob = this.closeJob.bind(this);
+    this.countPinnedJobs = this.countPinnedJobs.bind(this);
+    // give access to this count to components that don't have a common ancestor in React
+    // TODO: remove this once we're fully on ReactJS.
+    this.$rootScope.countPinnedJobs = this.countPinnedJobs;
 
     this.jobClickUnlisten = this.$rootScope.$on(thEvents.jobClick, (evt, job) => {
       this.setState({
         jobDetailLoading: true,
         jobDetails: [],
         suggestions: [],
+        isPinBoardVisible: !!this.countPinnedJobs(),
       }, () => this.selectJob(job));
     });
 
     this.clearSelectedJobUnlisten = this.$rootScope.$on(thEvents.clearSelectedJob, () => {
-      const { pinnedJobs } = this.state;
+      // const { pinnedJobs } = this.state;
 
       if (this.selectJobController !== null) {
         this.selectJobController.abort();
       }
-      if (!Object.keys(pinnedJobs).length) {
+      if (!this.countPinnedJobs()) {
         this.closeJob();
       }
     });
@@ -126,6 +132,7 @@ class DetailsPanel extends React.Component {
     this.jobsClassifiedUnlisten();
     this.clearPinboardUnlisten();
     this.pulsePinCountUnlisten();
+    this.pinAllShownJobsUnlisten();
   }
 
   getRevisionTips() {
@@ -280,8 +287,6 @@ class DetailsPanel extends React.Component {
         }));
       }
 
-      // set the tab options and selections based on the selected job
-      // initializeTabs($scope.job, (Object.keys(performanceData).length > 0));
       this.setState({
         job,
         jobLogUrls,
@@ -337,7 +342,7 @@ class DetailsPanel extends React.Component {
   pinJob(job) {
     const { pinnedJobs } = this.state;
 
-    if (thPinboardMaxSize - Object.keys(pinnedJobs).length > 0) {
+    if (thPinboardMaxSize - this.countPinnedJobs() > 0) {
       this.setState({
         pinnedJobs: { ...pinnedJobs, [job.id]: job },
         isPinBoardVisible: true,
@@ -365,12 +370,15 @@ class DetailsPanel extends React.Component {
     this.setState({
       pinnedJobs: { ...pinnedJobs, ...newPinnedJobs },
       isPinBoardVisible: true,
+    }, () => {
+      if (!this.props.selectedJob) {
+        this.$rootScope.$emit(thEvents.jobClick, jobsToPin[0]);
+      }
     });
   }
 
   pinAllShownJobs() {
-    const { pinnedJobs } = this.state;
-    const spaceRemaining = thPinboardMaxSize - Object.keys(pinnedJobs).length;
+    const spaceRemaining = thPinboardMaxSize - this.countPinnedJobs();
 
     if (!spaceRemaining) {
       this.thNotify.send(thPinboardCountError, 'danger', { sticky: true });
@@ -385,12 +393,16 @@ class DetailsPanel extends React.Component {
     this.pinJobs(shownJobs.slice(0, spaceRemaining));
 
     if (showError) {
-      this.thNotify.send(thPinboardCountError, 'danger', { sticky: true });
+      this.$timeout(this.thNotify.send(thPinboardCountError, 'danger', { sticky: true }));
     }
 
-    if (!this.$rootScope.selectedJob) {
-      this.$rootScope.selectedJob = shownJobs[0];
-    }
+    // if (!this.props.selectedJob) {
+    //   this.$rootScope.$emit(thEvents.jobClick, shownJobs[0]);
+    // }
+  }
+
+  countPinnedJobs() {
+    return Object.keys(this.state.pinnedJobs).length;
   }
 
   addBug(bug, job) {
@@ -419,7 +431,7 @@ class DetailsPanel extends React.Component {
 
   render() {
     const {
-      repoName, $injector, user, currentRepo
+      repoName, $injector, user, currentRepo,
     } = this.props;
     const {
       job, isPinBoardVisible, jobDetails, jobRevision, jobLogUrls, jobDetailLoading,
@@ -437,6 +449,7 @@ class DetailsPanel extends React.Component {
         />
         {isPinBoardVisible && <PinBoard
           isVisible={isPinBoardVisible}
+          selectedJob={job}
           isLoggedIn={user.isLoggedIn || false}
           classificationTypes={this.thClassificationTypes}
           revisionList={this.getRevisionTips()}

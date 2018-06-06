@@ -43,6 +43,12 @@ treeherderApp.controller('MainCtrl', [
         $rootScope.revision = $location.search().revision;
         thClassificationTypes.load();
 
+        // TODO: remove this once we're off of Angular completely.
+        console.log("adding countPinnedJobs");
+        $rootScope.countPinnedJobs = function () {
+            return 0;
+        };
+
         const checkServerRevision = function () {
             return $q(function (resolve, reject) {
                 $http({

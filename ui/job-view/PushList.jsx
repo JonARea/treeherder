@@ -253,12 +253,17 @@ export default class PushList extends React.Component {
     }, 200);
   }
 
-  // Clear the job if it occurs in a particular area
+  // Clear the selectedJob
   closeJob() {
-    // Suppress for various UI elements so selection is preserved
-    const selected = findSelectedInstance();
-    if (selected) {
-      selected.setSelected(false);
+    // TODO: Should block clearing the selected job if there are pinned jobs
+    // But can't get the pinned jobs at this time.  When we're completely on React,
+    // or at least have a shared parent between PushList and DetailsPanel, we can share
+    // a PinBoardModel or Context so they both have access.
+    if (!this.$rootScope.countPinnedJobs()) {
+      const selected = findSelectedInstance();
+      if (selected) {
+        selected.setSelected(false);
+      }
     }
   }
 

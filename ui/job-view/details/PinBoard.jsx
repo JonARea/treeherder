@@ -8,6 +8,7 @@ import { getBtnClass, getStatus } from '../../helpers/job';
 import { getBugUrl } from '../../helpers/url';
 import { thEvents } from '../../js/constants';
 import JobClassificationModel from '../../models/classification';
+import JobModel from '../../models/job';
 import BugJobMapModel from '../../models/bugJobMap';
 import { formatModelError } from '../../helpers/errorMessage';
 
@@ -35,6 +36,7 @@ export default class PinBoard extends React.Component {
     this.save = this.save.bind(this);
     this.handleRelatedBugDocumentClick = this.handleRelatedBugDocumentClick.bind(this);
     this.unPinAll = this.unPinAll.bind(this);
+    this.retriggerAllPinnedJobs = this.retriggerAllPinnedJobs.bind(this);
 
     this.addRelatedBugUnlisten = this.$rootScope.$on(thEvents.addRelatedBug, (event, job) => {
       this.props.pinJob(job);
@@ -179,7 +181,8 @@ export default class PinBoard extends React.Component {
 
   retriggerAllPinnedJobs() {
     // pushing pinned jobs to a list.
-    this.retriggerJob(Object.values(this.props.pinnedJobs));
+    const jobIds = Object.keys(this.props.pinnedJobs);
+    JobModel.retrigger(this.$rootScope.repoName, jobIds);
   }
 
   cancelAllPinnedJobsTitle() {
@@ -199,9 +202,10 @@ export default class PinBoard extends React.Component {
     return this.props.isLoggedIn && cancellableJobs.length > 0;
   }
 
-  cancelAllPinnedJobs() {
+  async cancelAllPinnedJobs() {
     if (window.confirm('This will cancel all the selected jobs. Are you sure?')) {
-      this.cancelJobs(Object.values(this.props.pinnedJobs));
+      await JobModel.cancel(this.$rootScope.repoName, Object.keys(this.props.pinnedJobs));
+      this.unPinAll();
     }
   }
 
@@ -334,7 +338,6 @@ export default class PinBoard extends React.Component {
   viewJob(job) {
     this.$rootScope.selectedJob = job;
     this.$rootScope.$emit(thEvents.jobClick, job);
-    this.$rootScope.$emit(thEvents.selectJob, job);
   }
 
   render() {
@@ -361,13 +364,13 @@ export default class PinBoard extends React.Component {
               {Object.values(pinnedJobs).map(job => (
                 <span className="btn-group" key={job.id}>
                   <span
-                    className={`btn pinned-job ${this.getBtnClass(job)} ${selectedJob === job ? 'btn-lg selected-job' : 'btn-xs'}`}
+                    className={`btn pinned-job ${this.getBtnClass(job)} ${selectedJob.id === job.id ? 'btn-lg selected-job' : 'btn-xs'}`}
                     title={this.getHoverText(job)}
                     onClick={() => this.viewJob(job)}
                     data-job-id={job.job_id}
                   >{job.job_type_symbol}</span>
                   <span
-                    className={`btn btn-ltgray pinned-job-close-btn ${selectedJob === job ? 'btn-lg selected-job' : 'btn-xs'}`}
+                    className={`btn btn-ltgray pinned-job-close-btn ${selectedJob.id === job.id ? 'btn-lg selected-job' : 'btn-xs'}`}
                     onClick={() => unPinJob(job.id)}
                     title="un-pin this job"
                   ><i className="fa fa-times" /></span>
@@ -508,7 +511,7 @@ export default class PinBoard extends React.Component {
                 >
                   <a
                     className="dropdown-item"
-                    onClick={() => !isLoggedIn || this.retriggerAllPinnedJobs}
+                    onClick={() => !isLoggedIn || this.retriggerAllPinnedJobs()}
                   >Retrigger all</a></li>
                 <li
                   className={this.canCancelAllPinnedJobs() ? '' : 'disabled'}
@@ -516,10 +519,10 @@ export default class PinBoard extends React.Component {
                 >
                   <a
                     className="dropdown-item"
-                    onClick={() => this.canCancelAllPinnedJobs && this.cancelAllPinnedJobs}
+                    onClick={() => this.canCancelAllPinnedJobs() && this.cancelAllPinnedJobs()}
                   >Cancel all</a>
                 </li>
-                <li><a className="dropdown-item" onClick={this.unPinAll}>Clear
+                <li><a className="dropdown-item" onClick={() => this.unPinAll()}>Clear
                   all</a></li>
               </ul>
             </div>
@@ -542,14 +545,12 @@ PinBoard.propTypes = {
   unPinJob: PropTypes.func.isRequired,
   pinJob: PropTypes.func.isRequired,
   unPinAll: PropTypes.func.isRequired,
+  selectedJob: PropTypes.object.isRequired,
   email: PropTypes.string,
-  selectedJob: PropTypes.object,
   revisionList: PropTypes.array,
 };
 
 PinBoard.defaultProps = {
   email: null,
-  selectedJob: null,
-  classificationTypes: null,
   revisionList: [],
 };
